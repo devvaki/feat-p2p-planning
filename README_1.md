@@ -43,7 +43,7 @@ The path is returned as a list of `(lat, lon, bearing_deg)` samples.
     <img src="r2_1.png" width="600" height="900">
 </div>
 
-## Next steps (concise)
+## Next steps
 1. **Curved local planner:** Implement **Dubins** (no reverse) and/or **Reeds–Shepp** (with reverse), using `R_min = 1 / max_curvature`.
 2. **Global search:** Add **PRM** or **Hybrid A\***—sample (x,y,θ), connect neighbors via Dubins/RS (reject colliding edges), run A*, sample final curve.
 3. **Path improvement:** Shortcut/smooth while preserving clearance & curvature; optional speed profile.
