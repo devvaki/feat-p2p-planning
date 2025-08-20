@@ -1,50 +1,107 @@
 # p2p_planning (Point-to-Point Path Planning) of a Robot
 
-- A library for 2D **robot path planning** inside a **geofenced** environment.  
+- This project implements a **2D point-to-point path planning library** for robots in a geofenced area.   
 - It loads **GeoJSON** maps (outer boundary + inner holes/obstacles), converts everything to **UTM meters**, and computes collision-free paths, kinematically feasible that respect **robot footprint** and **clearance** constraints.
 - A CLI visualizer lets you render maps, start/goal poses, and planned paths (PNG output).
 
-## Task Overview
+The planner outputs:
+- A **collision-free path** connecting each start to its goal.  
+- Paths that respect **robot kinematic constraints** (via Hybrid-A*).  
+- Visualization plots (`.png`) showing the paths inside the geofence.
 
-Design and implement a planner that, given:
-- A **geofence** (outer boundary and internal obstacles/holes) provided as **GeoJSON**, and
-- **Start** and **Goal** robot poses: `(latitude, longitude, bearing_deg)`
+## Methods and Approaches
 
-Produces a **collision-free**, **kinematically feasible** path:
-- honoring the robot **footprint** (width, front/rear lengths),
-- maintaining a minimum **obstacle clearance**, and
-- respecting the robot’s **turning limit** via `max_curvature = 1 / R_min`.
+The path-planning pipeline integrates several methods to ensure collision-free, kinematically feasible, and near-optimal trajectories between start and goal points within geofenced areas.
 
-The path is returned as a list of `(lat, lon, bearing_deg)` samples.
+### 1. Geofence Handling
+Input: GeoJSON files defining outer boundaries and internal obstacles.
+Processing: Converted lat/lon → UTM for metric calculations.
+Purpose: Ensures robot stays strictly inside the allowed region.
 
-⚠️ Current implementation includes a **baseline straight-line planner** with full footprint/clearance checks. 
+### 2. Graph-based Planning (A*)
+Used A* search for initial pathfinding.
+Guarantees a valid path if one exists.
+Provides a baseline for optimality in terms of shortest path length.
 
-## Approach Used Till Now:
-- **Map ingest:** Parse GeoJSON (Polygon/MultiPolygon/FeatureCollection). Pick the largest outer ring as boundary; treat inner rings (and other outers) as obstacles. Convert all vertices to **absolute UTM meters** and cache `utm_zone` + `band`.
-- **Footprint & clearance:** Use a fast, conservative **enclosing circle** for the rectangular robot footprint; require distance to all polygon edges ≥ (robot_radius + clearance).
-- **Baseline planner:** Try a **straight-line** segment from start→goal, sampled at `path_resolution`; reject if any sample violates boundary/obstacle/clearance. Convert path back to `(lat, lon, bearing)`.
-- **Visualization:** CLI to render boundary, holes, start/goal headings, and path; supports **batch** across all datasets and prints a compact **summary table**.
+### 3. Collision Checking
+Implemented using polygonal intersection tests against obstacles.
+Each candidate path segment is checked to avoid any overlap with geofence boundaries.
+Ensures collision-free trajectories.
 
-- Curved planning (Dubins / Reeds-Shepp / PRM / Hybrid-A*) is the next milestone.
+### 4. Kinematic Constraints
+Integrated heading and turning-radius limits in the planner.
+Paths are filtered and adjusted to respect differential-drive/nonholonomic robot motion models.
+Prevents infeasible maneuvers (e.g., sharp turns).
 
-## Challenges
-- **Coordinate discipline:** Enforce a single **UTM zone/band**; validate start/goal against the map to prevent silent distortions.
-- **Clearance modeling:** Balance speed vs fidelity; enclosing circle is safe and fast, but conservative.
-- **Bearing conventions:** CSV = **0° North, clockwise**; internal ENU yaw is CCW radians—convert consistently.
-- **Baseline limits:** Straight lines fail when obstacles intervene; requires curved, obstacle-avoiding motion.
+### 5. Hybrid A*
+Combines grid-based A* with continuous vehicle kinematics.
+Produces smooth, drivable paths (not just piecewise linear).
+Balances optimality and real-time feasibility.
 
-## Progress so far
-- ✅ **GeoJSON→UTM** loader with boundary/holes and zone/band caching.
-- ✅ **Straight-line** planner with footprint + clearance checks and clear errors.
-- ✅ **Visualizer**: single + batch, PNG output to `results/plot_v1/`, terminal **table** with load/plan time, points, length.
-- ✅ Batch results show ~**50%** pairs succeed with straight lines; the rest are **BLOCKED** (as expected).
+### 6. Visualization and Evaluation
+Automated plotting for each start–goal pair.
+Metrics evaluated:
+Path length
+Collision-freeness
+Kinematic feasibility
+Computation time
 
-<div>
-    <img src="r2_1.png" width="600" height="900">
-</div>
+### 7. Testing
+Unit tests (pytest) check:
+Correct geofence loading
+Path validity and safety
+Constraint satisfaction
+Performance across multiple fields
 
-## Next steps
-1. **Curved local planner:** Implement **Dubins** (no reverse) and/or **Reeds–Shepp** (with reverse), using `R_min = 1 / max_curvature`.
-2. **Global search:** Add **PRM** or **Hybrid A\***—sample (x,y,θ), connect neighbors via Dubins/RS (reject colliding edges), run A*, sample final curve.
-3. **Path improvement:** Shortcut/smooth while preserving clearance & curvature; optional speed profile.
-4. **Tests & perf:** Unit tests for `plan()` (success/failure/clearance), profiling, spatial indexing or Cython/C++ for hot loops.
+## Challenges and Solution
+
+## 1. **Hybrid A\* Primitive Validation**
+- **Problem:** `primitive_ok` in `plan_hybrid` caused failures due to wrong arguments and overly strict collision checks.  
+- **Solution:** Fixed the function signature, clarified **pose validation**, and adjusted **safety radius** margins to prevent false negatives.
+
+### 2. **Collision Checking Overhead**
+- **Problem:** Pathfinding slowed down because each pose checked every edge repeatedly.  
+- **Solution:** Optimized distance-to-segment checks and used bounding-box pre-filters to speed up calculations.
+
+### 3. **Hybrid A\* Failures**
+- **Problem:** Hybrid A\* sometimes failed to find paths in narrow spaces.  
+- **Solution:** Added **VisGraph fallback** – ensures at least a geometric path is returned if Hybrid A\* fails.
+
+## ▶️ How to Run
+
+### 1. Install Dependencies
+```bash
+pip install -r requirements.txt
+```
+### 2. Run Tests
+```bash
+PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 pytest -q
+```
+Expected output: 8 passed
+
+### 3. Visualize Paths
+```bash
+# Run Hybrid-A* mode
+python tests/visualize.py --batch_all --mode hybrid --save_dir results/hybrid_plots
+
+# Run Visibility Graph mode
+python tests/visualize.py --batch_all --mode visgraph --save_dir results/visgraph_plots
+```
+### 4. Install Cython (optional)
+```bash
+pip install cython
+#Build the extension in place:
+python setup.py build_ext --inplace
+```
+
+## Current Limitations
+- Robot footprint is approximated as a point with safety radius (not full polygon footprint).
+- Hybrid A* is slower and may fail in very tight geofences.
+- No dynamic obstacle handling (static maps only).
+- No explicit optimality guarantee (A* is near-optimal, Hybrid A* is heuristic).
+
+## Future Improvements
+- Full polygonal robot footprint collision checking.
+- Smarter heuristic tuning for Hybrid A*.
+- Multi-agent / dynamic obstacle support.
+- Combined Hybrid + VisGraph mode in a single planner.
