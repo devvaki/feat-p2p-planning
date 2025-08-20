@@ -203,3 +203,41 @@ marimo/_lsp/
 __marimo__/
 
 *.egg-info/
+
+*.c
+*.so
+*.pyd
+results/*
+
+# Virtual environments
+.venv/
+env/
+venv/
+
+# Python cache / compiled
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Cython build outputs
+*.c
+*.so
+*.pyd
+build/
+dist/
+*.egg-info/
+
+# Test / coverage
+.pytest_cache/
+.coverage
+htmlcov/
+
+# IDE / editor
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Results / generated plots
+results/
+
