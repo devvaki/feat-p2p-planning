@@ -110,12 +110,29 @@ def run_once(args, quiet: bool = False):
     # Plan
     try:
         t2 = time.perf_counter()
-        path = planner.plan(
-            start_pose=start_pose,
-            end_pose=goal_pose,
-            path_resolution=args.path_resolution,
-            obstacle_clearance=args.obstacle_clearance,
-        )
+        if args.mode == "visgraph":
+            path = planner.plan_visgraph(
+                start_pose=start_pose,
+                end_pose=goal_pose,
+                path_resolution=args.path_resolution,
+                obstacle_clearance=args.obstacle_clearance,
+            )
+        elif args.mode == "hybrid":
+            path = planner.plan_hybrid(
+                start_pose=start_pose,
+                end_pose=goal_pose,
+                path_resolution=args.path_resolution,
+                obstacle_clearance=args.obstacle_clearance,
+            )
+        else:
+            path = planner.plan(
+                start_pose=start_pose,
+                end_pose=goal_pose,
+                path_resolution=args.path_resolution,
+                obstacle_clearance=args.obstacle_clearance,
+            )
+
+
         t3 = time.perf_counter()
     except Exception as e:
         print(f"[planner] failed: {e}")
@@ -140,7 +157,7 @@ def run_once(args, quiet: bool = False):
             outer = poly[0]; holes = poly[1:]
             _plot_ring(ax, outer, lw=1.0)
             for h in holes:
-                _plot_ring(ax, h, lw=1.0, linestyle="--")
+                _plot_ring(ax, h, lw=1.0, linestyle="-")
 
     # Start/goal markers + headings
     s_lat, s_lon, s_b = start_pose
@@ -154,7 +171,7 @@ def run_once(args, quiet: bool = False):
     if path:
         xs = [lon for (_, lon, _) in path]
         ys = [lat for (lat, _, _) in path]
-        ax.plot(xs, ys, linestyle="--", label="path")
+        ax.plot(xs, ys, linestyle="-", label="path")
 
     ax.set_aspect("equal", adjustable="box")
     ax.set_xlabel("Longitude"); ax.set_ylabel("Latitude")
@@ -220,15 +237,16 @@ def main():
     # output control
     parser.add_argument("--save", type=Path, help="Save figure to this path (e.g., .png)")
     parser.add_argument("--save_dir", type=Path, help="Directory to save plots (auto-names field_X_pairY.png)")
-    parser.add_argument("--batch_all", action="store_true",
-                        help="Render ALL pairs for ALL three fields to --save_dir (non-interactive)")
+    parser.add_argument("--batch_all", action="store_true", help="Render ALL pairs for ALL three fields to --save_dir (non-interactive)")
     parser.add_argument("--show", action="store_true", help="Show a window (omit for batch runs)")
     
+    parser.add_argument('--mode', type=str, default='straight', choices=['straight','visgraph','hybrid'], help='Planning mode')
+
     args = parser.parse_args()
 
     repo_root = Path(__file__).resolve().parents[1]
     if args.save_dir is None:
-        args.save_dir = repo_root / "results" / "plot_v1"
+        args.save_dir = repo_root / "results" / "plot_v2"
 
     if args.batch_all:
         out_dir = args.save_dir
